@@ -1,0 +1,23 @@
+server:
+  port: 8085
+
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: application-group
+    topics:
+
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  datasource:
+    url: jdbc:postgresql://localhost:5437/applicationdb
+    username: applicationuser
+    password: applicationpass
+  jpa:
+    hibernate:
+      ddl-auto: none
