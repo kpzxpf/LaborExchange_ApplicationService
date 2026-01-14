@@ -7,7 +7,12 @@ spring:
     consumer:
       group-id: application-group
     topics:
+      application-topic: application-event
 
+  clients:
+    vacancy-service:
+      name: vacancy-service
+      url: http://localhost:8083
 
   flyway:
     enabled: true
