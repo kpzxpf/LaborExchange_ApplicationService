@@ -8,23 +8,17 @@ CREATE TABLE application_statuses
 
 INSERT INTO application_statuses (code, name, description)
 VALUES ('NEW', 'Новый', 'Соискатель только что отправил отклик'),
-       ('REVIEWING', 'На рассмотрении', 'HR или работодатель изучают резюме'),
-       ('INTERVIEW', 'Интервью', 'Назначена встреча или созвон'),
-       ('OFFER', 'Оффер', 'Работодатель предложил работу'),
        ('REJECTED', 'Отказ', 'По той или иной причине в найме отказано'),
-       ('WITHDRAWN', 'Отозван', 'Соискатель сам отозвал свой отклик');
+       ('WITHDRAWN', 'Отозван', 'Соискатель отозвал свой отклик');
 
 CREATE TABLE applications
 (
     id           BIGSERIAL PRIMARY KEY,
-    employer_id  UUID    NOT NULL, -- Кто нанимает
-    vacancy_id   UUID    NOT NULL, -- На какую вакансию
-    candidate_id UUID    NOT NULL, -- Кто откликнулся
-    resume_id    UUID    NOT NULL, -- Какое резюме прикрепил
+    employer_id  INTEGER NOT NULL, -- Кто нанимает
+    vacancy_id   INTEGER NOT NULL, -- На какую вакансию
+    candidate_id INTEGER NOT NULL, -- Кто откликнулся
+    resume_id    INTEGER NOT NULL, -- Какое резюме прикрепил
     status_id    INTEGER NOT NULL         DEFAULT 1,
-
-    cover_letter TEXT,
-
     created_at   TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at   TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
 

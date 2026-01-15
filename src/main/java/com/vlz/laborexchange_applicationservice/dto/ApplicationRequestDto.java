@@ -1,7 +1,6 @@
 package com.vlz.laborexchange_applicationservice.dto;
 
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,6 +23,6 @@ public class ApplicationRequestDto {
     @NotNull
     private Long resumeId;
 
-    @Size(max = 1000)
-    private String coverLetter;
+    @NotNull
+    private String StatusCode;
 }

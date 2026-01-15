@@ -36,9 +36,6 @@ public class Application {
     @JoinColumn(name = "status_id", nullable = false)
     private ApplicationStatus status;
 
-    @Column(name = "cover_letter")
-    private String coverLetter;
-
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

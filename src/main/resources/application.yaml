@@ -7,12 +7,18 @@ spring:
     consumer:
       group-id: application-group
     topics:
-      application-topic: application-event
+      new-topic: NEW
+      rejected-topoic: REJECTED
+      withdrawn-topic: WITHDRAWN
+
 
   clients:
     vacancy-service:
       name: vacancy-service
       url: http://localhost:8083
+    user-service:
+      name: user-service
+      url: http://localhost:8082
 
   flyway:
     enabled: true

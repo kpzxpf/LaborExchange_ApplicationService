@@ -1,6 +1,5 @@
 package com.vlz.laborexchange_applicationservice.dto;
 
-import com.vlz.laborexchange_applicationservice.entity.ApplicationStatusType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,8 +16,6 @@ public class ApplicationResponseDto {
     private Long vacancyId;
     private Long candidateId;
     private Long resumeId;
-    private ApplicationStatusType statusCode;
     private String statusName;
-    private String coverLetter;
     private LocalDateTime createdAt;
 }

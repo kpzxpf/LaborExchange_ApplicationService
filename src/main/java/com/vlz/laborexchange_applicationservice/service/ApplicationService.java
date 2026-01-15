@@ -1,10 +1,15 @@
 package com.vlz.laborexchange_applicationservice.service;
 
+import com.vlz.laborexchange_applicationservice.client.UserServiceClient;
 import com.vlz.laborexchange_applicationservice.client.VacancyClient;
-import com.vlz.laborexchange_applicationservice.dto.ApplicationEvent;
+import com.vlz.laborexchange_applicationservice.dto.NewApplicationEvent;
+import com.vlz.laborexchange_applicationservice.dto.RejectedApplicationEvent;
+import com.vlz.laborexchange_applicationservice.dto.WithdrawnApplicationEvent;
 import com.vlz.laborexchange_applicationservice.entity.Application;
 import com.vlz.laborexchange_applicationservice.entity.ApplicationStatusType;
-import com.vlz.laborexchange_applicationservice.producer.ApplicationNotificationProducer;
+import com.vlz.laborexchange_applicationservice.producer.NewApplicationNotificationProducer;
+import com.vlz.laborexchange_applicationservice.producer.RejectedApplicationNotificationProducer;
+import com.vlz.laborexchange_applicationservice.producer.WithdrawnApplicationProducer;
 import com.vlz.laborexchange_applicationservice.repository.ApplicationRepository;
 import feign.FeignException;
 import jakarta.persistence.EntityNotFoundException;
@@ -25,14 +30,58 @@ import java.util.List;
 public class ApplicationService {
 
     private final ApplicationRepository applicationRepository;
-    private final ApplicationNotificationProducer applicationNotificationProducer;
+    private final NewApplicationNotificationProducer newApplicationNotificationProducer;
+    private final RejectedApplicationNotificationProducer rejectedApplicationNotificationProducer;
+    private final WithdrawnApplicationProducer withdrawnApplicationProducer;
     private final VacancyClient vacancyClient;
+    private final UserServiceClient userServiceClient;
 
     @Transactional
     public Application createApplication(Application application) {
         application.setStatusFromType(ApplicationStatusType.NEW);
-        return applicationRepository.save(application);
+
+        Application savedApplication = applicationRepository.save(application);
+
+        newApplicationNotificationProducer.send(NewApplicationEvent.builder()
+                .applicationId(savedApplication.getId())
+                .employerEmail(getEmailByUserId(savedApplication.getEmployerId()))
+                .vacancyTitle(getVacancyTitle(savedApplication.getVacancyId()))
+                .build());
+
+        return savedApplication;
     }
+
+    @Transactional
+    public Application rejectApplication(Application application) {
+        application.setStatusFromType(ApplicationStatusType.REJECTED);
+
+        Application savedApplication = applicationRepository.save(application);
+
+        rejectedApplicationNotificationProducer.send(RejectedApplicationEvent.builder()
+                .applicationId(savedApplication.getId())
+                .candidateEmail(getEmailByUserId(savedApplication.getCandidateId()))
+                .vacancyTitle(getVacancyTitle(savedApplication.getVacancyId()))
+                .build());
+
+        return savedApplication;
+    }
+
+    @Transactional
+    public Application withdrawnApplication(Application application) {
+        application.setStatusFromType(ApplicationStatusType.WITHDRAWN);
+
+        Application savedApplication = applicationRepository.save(application);
+
+        withdrawnApplicationProducer.send(WithdrawnApplicationEvent.builder()
+                .applicationId(savedApplication.getId())
+                .employerEmail(getEmailByUserId(savedApplication.getCandidateId()))
+                .vacancyTitle(getVacancyTitle(savedApplication.getVacancyId()))
+                .build());
+
+        return savedApplication;
+    }
+
+
 
     @Transactional(readOnly = true)
     public Application getById(Long id) {
@@ -42,7 +91,7 @@ public class ApplicationService {
 
     @Transactional(readOnly = true)
     public List<Application> getApplicationsByVacancy(Long vacancyId) {
-        return applicationRepository.findByVacancyId(vacancyId).orElseThrow(()-> {
+        return applicationRepository.findByVacancyId(vacancyId).orElseThrow(() -> {
             log.error("Applications Not Found by VacancyId {}", vacancyId);
             return new EntityNotFoundException("Applications not found");
         });
@@ -50,27 +99,26 @@ public class ApplicationService {
 
     @Transactional(readOnly = true)
     public List<Application> getApplicationsByCandidate(Long candidateId) {
-        return applicationRepository.findByCandidateId(candidateId).orElseThrow(()-> {
+        return applicationRepository.findByCandidateId(candidateId).orElseThrow(() -> {
             log.error("Applications Not Found by CandidateId {}", candidateId);
             return new EntityNotFoundException("Applications not found");
         });
     }
 
-    @Transactional
-    public Application updateStatus(Long id, ApplicationStatusType statusType) {
-        Application application = getById(id);
-        application.setStatusFromType(statusType);
-        Application savedApplication = applicationRepository.save(application);
+    @Retryable(
+            retryFor = {FeignException.class, IOException.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 1000, multiplier = 2)
+    )
+    public String getEmailByUserId(Long userId) {
+        return userServiceClient.getEmailById(userId);
+    }
 
-        applicationNotificationProducer.send(ApplicationEvent.builder()
-                .applicationId(savedApplication.getId())
-                .candidateId(savedApplication.getCandidateId())
-                .statusCode(savedApplication.getStatus().getCode().name())
-                .employerId(savedApplication.getEmployerId())
-                .vacancyTitle(getVacancyTitle(savedApplication.getVacancyId()))
-                .build());
-
-        return savedApplication;
+    @Recover
+    public String recoverEmailByUserId(FeignException e, Long userId) {
+        log.error("Failed to fetch email for user id: {}. Status: {}",
+                userId, e.status(), e);
+        return null;
     }
 
     @Retryable(

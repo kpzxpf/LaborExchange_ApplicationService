@@ -9,10 +9,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ApplicationEvent {
+public class NewApplicationEvent {
     private Long applicationId;
-    private Long employerId;
-    private Long candidateId;
+    private String employerEmail;
     private String vacancyTitle;
-    private String statusCode;
 }
