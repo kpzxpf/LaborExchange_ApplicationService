@@ -81,8 +81,6 @@ public class ApplicationService {
         return savedApplication;
     }
 
-
-
     @Transactional(readOnly = true)
     public Application getById(Long id) {
         return applicationRepository.findById(id)

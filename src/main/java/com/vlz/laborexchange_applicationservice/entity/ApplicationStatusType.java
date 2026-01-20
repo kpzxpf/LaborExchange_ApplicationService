@@ -14,13 +14,4 @@ public enum ApplicationStatusType {
     WITHDRAWN(6);
 
     private final Integer id;
-
-    public static ApplicationStatusType fromId(Integer id) {
-        for (ApplicationStatusType type : values()) {
-            if (type.id.equals(id)) {
-                return type;
-            }
-        }
-        throw new IllegalArgumentException("Unknown status id: " + id);
-    }
 }

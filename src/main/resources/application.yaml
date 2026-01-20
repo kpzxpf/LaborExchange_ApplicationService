@@ -8,7 +8,7 @@ spring:
       group-id: application-group
     topics:
       new-topic: NEW
-      rejected-topoic: REJECTED
+      rejected-topic: REJECTED
       withdrawn-topic: WITHDRAWN
 
 
