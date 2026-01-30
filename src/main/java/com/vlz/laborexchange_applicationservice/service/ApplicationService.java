@@ -1,7 +1,5 @@
 package com.vlz.laborexchange_applicationservice.service;
 
-import com.vlz.laborexchange_applicationservice.client.UserServiceClient;
-import com.vlz.laborexchange_applicationservice.client.VacancyClient;
 import com.vlz.laborexchange_applicationservice.dto.NewApplicationEvent;
 import com.vlz.laborexchange_applicationservice.dto.RejectedApplicationEvent;
 import com.vlz.laborexchange_applicationservice.dto.WithdrawnApplicationEvent;
@@ -11,17 +9,12 @@ import com.vlz.laborexchange_applicationservice.producer.NewApplicationNotificat
 import com.vlz.laborexchange_applicationservice.producer.RejectedApplicationNotificationProducer;
 import com.vlz.laborexchange_applicationservice.producer.WithdrawnApplicationProducer;
 import com.vlz.laborexchange_applicationservice.repository.ApplicationRepository;
-import feign.FeignException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Recover;
-import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
 import java.util.List;
 
 @Slf4j
@@ -33,8 +26,8 @@ public class ApplicationService {
     private final NewApplicationNotificationProducer newApplicationNotificationProducer;
     private final RejectedApplicationNotificationProducer rejectedApplicationNotificationProducer;
     private final WithdrawnApplicationProducer withdrawnApplicationProducer;
-    private final VacancyClient vacancyClient;
-    private final UserServiceClient userServiceClient;
+    private final VacancyRetryClient vacancyRetryClient;
+    private final UserRetryClient userRetryClient;
 
     @Transactional
     public Application createApplication(Application application) {
@@ -44,8 +37,8 @@ public class ApplicationService {
 
         newApplicationNotificationProducer.send(NewApplicationEvent.builder()
                 .applicationId(savedApplication.getId())
-                .employerEmail(getEmailByUserId(savedApplication.getEmployerId()))
-                .vacancyTitle(getVacancyTitle(savedApplication.getVacancyId()))
+                .employerEmail(userRetryClient.getEmailByUserId(savedApplication.getEmployerId()))
+                .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
                 .build());
 
         return savedApplication;
@@ -59,8 +52,8 @@ public class ApplicationService {
 
         rejectedApplicationNotificationProducer.send(RejectedApplicationEvent.builder()
                 .applicationId(savedApplication.getId())
-                .candidateEmail(getEmailByUserId(savedApplication.getCandidateId()))
-                .vacancyTitle(getVacancyTitle(savedApplication.getVacancyId()))
+                .candidateEmail(userRetryClient.getEmailByUserId(savedApplication.getCandidateId()))
+                .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
                 .build());
 
         return savedApplication;
@@ -74,8 +67,8 @@ public class ApplicationService {
 
         withdrawnApplicationProducer.send(WithdrawnApplicationEvent.builder()
                 .applicationId(savedApplication.getId())
-                .employerEmail(getEmailByUserId(savedApplication.getCandidateId()))
-                .vacancyTitle(getVacancyTitle(savedApplication.getVacancyId()))
+                .employerEmail(userRetryClient.getEmailByUserId(savedApplication.getCandidateId()))
+                .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
                 .build());
 
         return savedApplication;
@@ -84,7 +77,10 @@ public class ApplicationService {
     @Transactional(readOnly = true)
     public Application getById(Long id) {
         return applicationRepository.findById(id)
-                .orElseThrow(() -> new EntityNotFoundException("Application not found"));
+                .orElseThrow(() -> {
+                    log.error("Application with id {} not found", id);
+                    return new EntityNotFoundException("Application with id " + id + " not found");
+                });
     }
 
     @Transactional(readOnly = true)
@@ -101,37 +97,5 @@ public class ApplicationService {
             log.error("Applications Not Found by CandidateId {}", candidateId);
             return new EntityNotFoundException("Applications not found");
         });
-    }
-
-    @Retryable(
-            retryFor = {FeignException.class, IOException.class},
-            maxAttempts = 3,
-            backoff = @Backoff(delay = 1000, multiplier = 2)
-    )
-    public String getEmailByUserId(Long userId) {
-        return userServiceClient.getEmailById(userId);
-    }
-
-    @Recover
-    public String recoverEmailByUserId(FeignException e, Long userId) {
-        log.error("Failed to fetch email for user id: {}. Status: {}",
-                userId, e.status(), e);
-        return null;
-    }
-
-    @Retryable(
-            retryFor = {FeignException.class, IOException.class},
-            maxAttempts = 3,
-            backoff = @Backoff(delay = 1000, multiplier = 2)
-    )
-    public String getVacancyTitle(Long id) {
-        log.info("Attempting to fetch vacancy title for id: {}", id);
-        return vacancyClient.getById(id).getTitle();
-    }
-
-    @Recover
-    public String recoverVacancyTitle(Exception e, Long id) {
-        log.error("Failed to fetch vacancy title after retries for id: {}. Error: {}", id, e.getMessage());
-        return "Position not specified";
     }
 }
