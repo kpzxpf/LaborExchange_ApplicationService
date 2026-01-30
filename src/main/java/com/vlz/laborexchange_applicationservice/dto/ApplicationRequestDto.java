@@ -22,7 +22,4 @@ public class ApplicationRequestDto {
 
     @NotNull
     private Long resumeId;
-
-    @NotNull
-    private String StatusCode;
 }

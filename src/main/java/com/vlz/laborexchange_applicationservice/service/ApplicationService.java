@@ -1,10 +1,12 @@
 package com.vlz.laborexchange_applicationservice.service;
 
+import com.vlz.laborexchange_applicationservice.dto.ApplicationStatisticsDto;
 import com.vlz.laborexchange_applicationservice.dto.NewApplicationEvent;
 import com.vlz.laborexchange_applicationservice.dto.RejectedApplicationEvent;
 import com.vlz.laborexchange_applicationservice.dto.WithdrawnApplicationEvent;
 import com.vlz.laborexchange_applicationservice.entity.Application;
 import com.vlz.laborexchange_applicationservice.entity.ApplicationStatusType;
+import com.vlz.laborexchange_applicationservice.exception.DuplicateApplicationException;
 import com.vlz.laborexchange_applicationservice.producer.NewApplicationNotificationProducer;
 import com.vlz.laborexchange_applicationservice.producer.RejectedApplicationNotificationProducer;
 import com.vlz.laborexchange_applicationservice.producer.WithdrawnApplicationProducer;
@@ -16,6 +18,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -32,6 +36,9 @@ public class ApplicationService {
     @Transactional
     public Application createApplication(Application application) {
         application.setStatusFromType(ApplicationStatusType.NEW);
+
+        existsByVacancyIdAndCandidateIdAndResumeId(
+                application.getVacancyId(), application.getCandidateId(), application.getResumeId());
 
         Application savedApplication = applicationRepository.save(application);
 
@@ -97,5 +104,54 @@ public class ApplicationService {
             log.error("Applications Not Found by CandidateId {}", candidateId);
             return new EntityNotFoundException("Applications not found");
         });
+    }
+
+    @Transactional(readOnly = true)
+    public List<Application> getApplicationsByStatus(ApplicationStatusType statusType) {
+        return applicationRepository.findByStatus_Code(statusType)
+                .orElseThrow(() -> {
+                    log.error("Applications not found for status {}", statusType);
+                    return new EntityNotFoundException("No applications found for status: " + statusType);
+                });
+    }
+
+    @Transactional(readOnly = true)
+    public ApplicationStatisticsDto getStatistics() {
+        Long total = applicationRepository.count();
+
+        List<Object[]> grouped = applicationRepository.countByStatusGrouped();
+        Map<String, Long> byStatus = grouped.stream()
+                .collect(Collectors.toMap(
+                        arr -> ((ApplicationStatusType) arr[0]).name(),
+                        arr -> (Long) arr[1]
+                ));
+
+        List<ApplicationStatusType> activeStatuses = List.of(
+                ApplicationStatusType.NEW,
+                ApplicationStatusType.WITHDRAWN,
+                ApplicationStatusType.REJECTED
+        );
+        Long active = applicationRepository.countByStatusIn(activeStatuses);
+
+        Long withdrawn = byStatus.getOrDefault(ApplicationStatusType.WITHDRAWN.name(), 0L);
+        Double withdrawalRate = total > 0 ? (withdrawn * 100.0 / total) : 0.0;
+
+        return ApplicationStatisticsDto.builder()
+                .totalApplications(total)
+                .applicationsByStatus(byStatus)
+                .activeApplications(active)
+                .withdrawalRate(withdrawalRate)
+                .build();
+    }
+
+    private void existsByVacancyIdAndCandidateIdAndResumeId(
+            Long vacancyId, Long candidateId, Long resumeId) {
+        if (applicationRepository.existsByVacancyIdAndCandidateIdAndResumeId(vacancyId, candidateId, resumeId)) {
+            log.warn("Duplicate application detected for vacancy={}, candidate={}",
+                    vacancyId, candidateId);
+
+            throw new DuplicateApplicationException(
+                    "Application for this vacancy already exists");
+        }
     }
 }

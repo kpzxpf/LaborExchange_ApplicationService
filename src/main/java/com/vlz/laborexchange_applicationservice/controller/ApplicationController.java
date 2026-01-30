@@ -2,7 +2,9 @@ package com.vlz.laborexchange_applicationservice.controller;
 
 import com.vlz.laborexchange_applicationservice.dto.ApplicationRequestDto;
 import com.vlz.laborexchange_applicationservice.dto.ApplicationResponseDto;
+import com.vlz.laborexchange_applicationservice.dto.ApplicationStatisticsDto;
 import com.vlz.laborexchange_applicationservice.entity.Application;
+import com.vlz.laborexchange_applicationservice.entity.ApplicationStatusType;
 import com.vlz.laborexchange_applicationservice.mapper.ApplicationMapper;
 import com.vlz.laborexchange_applicationservice.service.ApplicationService;
 import jakarta.validation.Valid;
@@ -59,5 +61,19 @@ public class ApplicationController {
         Application saved = applicationService.withdrawnApplication(applicationMapper.toEntity(requestDto));
 
         return applicationMapper.toDto(saved);
+    }
+
+    @GetMapping("/status/{status}")
+    public List<ApplicationResponseDto> getByStatus(@PathVariable String status) {
+        ApplicationStatusType statusType = ApplicationStatusType.valueOf(status.toUpperCase());
+
+        return applicationService.getApplicationsByStatus(statusType).stream()
+                .map(applicationMapper::toDto)
+                .toList();
+    }
+
+    @GetMapping("/statistics")
+    public ApplicationStatisticsDto getStatistics() {
+        return applicationService.getStatistics();
     }
 }
