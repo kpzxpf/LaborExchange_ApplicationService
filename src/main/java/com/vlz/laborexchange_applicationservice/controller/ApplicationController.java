@@ -63,6 +63,14 @@ public class ApplicationController {
         return applicationMapper.toDto(saved);
     }
 
+    @GetMapping("/employer/{employerId}")
+    public List<ApplicationResponseDto> getByEmployer(@PathVariable Long employerId) {
+        return applicationService.getApplicationsByEmployer(employerId).stream()
+                .map(applicationMapper::toDto)
+                .toList();
+    }
+
+
     @GetMapping("/status/{status}")
     public List<ApplicationResponseDto> getByStatus(@PathVariable String status) {
         ApplicationStatusType statusType = ApplicationStatusType.valueOf(status.toUpperCase());

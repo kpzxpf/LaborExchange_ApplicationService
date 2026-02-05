@@ -16,6 +16,7 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
     Optional<List<Application>> findByCandidateId(Long candidateId);
     boolean existsByVacancyIdAndCandidateIdAndResumeId(Long vacancyId, Long candidateId, Long resumeId);
     Optional<List<Application>> findByStatus_Code(ApplicationStatusType statusType);
+    Optional<List<Application>> findByEmployerId(Long employerId);
 
     @Query("SELECT COUNT(a) FROM Application a WHERE a.status.code = :status")
     Long countByStatus(@Param("status") ApplicationStatusType status);

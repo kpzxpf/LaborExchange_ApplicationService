@@ -6,11 +6,6 @@ CREATE TABLE application_statuses
     description TEXT
 );
 
-INSERT INTO application_statuses (code, name, description)
-VALUES ('NEW', 'Новый', 'Соискатель только что отправил отклик'),
-       ('REJECTED', 'Отказ', 'По той или иной причине в найме отказано'),
-       ('WITHDRAWN', 'Отозван', 'Соискатель отозвал свой отклик');
-
 CREATE TABLE applications
 (
     id           BIGSERIAL PRIMARY KEY,

@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -113,6 +114,16 @@ public class ApplicationService {
                     log.error("Applications not found for status {}", statusType);
                     return new EntityNotFoundException("No applications found for status: " + statusType);
                 });
+    }
+
+    @Transactional(readOnly = true)
+    public List<Application> getApplicationsByEmployer(Long employerId) {
+        log.info("Fetching applications for employer: {}", employerId);
+
+        return applicationRepository.findByEmployerId(employerId).orElseThrow(() -> {
+            log.error("Applications Not Found by EmployerId {}", employerId);
+            return new EntityNotFoundException("Applications not found for employer: " + employerId);
+        });
     }
 
     @Transactional(readOnly = true)
