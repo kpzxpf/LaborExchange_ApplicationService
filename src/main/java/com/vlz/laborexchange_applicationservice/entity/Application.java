@@ -45,8 +45,14 @@ public class Application {
     private LocalDateTime updatedAt;
 
     public void setStatusFromType(ApplicationStatusType type) {
+        if (type == null) return;
         ApplicationStatus statusProxy = new ApplicationStatus();
         statusProxy.setId(type.getId());
+        statusProxy.setCode(type);
         this.status = statusProxy;
+    }
+
+    public ApplicationStatusType getStatusFromType() {
+        return this.status != null ? this.status.getCode() : null;
     }
 }

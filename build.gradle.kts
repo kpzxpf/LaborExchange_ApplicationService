@@ -27,7 +27,6 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
-
     implementation("org.springframework.cloud:spring-cloud-starter-openfeign")
 
     runtimeOnly("org.postgresql:postgresql")
@@ -37,14 +36,21 @@ dependencies {
     implementation("org.springframework.kafka:spring-kafka")
     implementation("com.fasterxml.jackson.core:jackson-databind")
 
-
-    compileOnly("org.projectlombok:lombok")
-    annotationProcessor("org.projectlombok:lombok")
-
-    annotationProcessor("org.projectlombok:lombok-mapstruct-binding:0.2.0")
+    implementation("com.github.loki4j:loki-logback-appender:1.5.0")
 
     implementation("org.mapstruct:mapstruct:1.6.3")
+    compileOnly("org.projectlombok:lombok")
+    annotationProcessor("org.projectlombok:lombok")
     annotationProcessor("org.mapstruct:mapstruct-processor:1.6.3")
-    implementation("com.github.loki4j:loki-logback-appender:1.5.0")
+    annotationProcessor("org.projectlombok:lombok-mapstruct-binding:0.2.0")
+
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    testCompileOnly("org.projectlombok:lombok")
+    testAnnotationProcessor("org.projectlombok:lombok")
+}
+
+tasks.withType<Test> {
+    useJUnitPlatform()
 }
