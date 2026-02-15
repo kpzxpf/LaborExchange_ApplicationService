@@ -9,6 +9,6 @@ import org.springframework.web.bind.annotation.RequestParam;
         url = "${spring.clients.user-service.url}"
 )
 public interface UserServiceClient {
-    @GetMapping("/emailById")
+    @GetMapping("/api/users/emailById")
     String getEmailById(@RequestParam("id") Long id);
 }

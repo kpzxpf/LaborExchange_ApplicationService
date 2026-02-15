@@ -10,6 +10,6 @@ import org.springframework.web.bind.annotation.PathVariable;
         url = "${spring.clients.vacancy-service.url}"
 )
 public interface VacancyClient {
-    @GetMapping("/{id}")
+    @GetMapping("/api/vacancies/{id}")
     VacancyDto getById(@PathVariable Long id);
 }
