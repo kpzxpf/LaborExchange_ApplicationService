@@ -1,6 +1,6 @@
 package com.vlz.laborexchange_applicationservice.service;
 
-import com.vlz.laborexchange_applicationservice.client.UserServiceClient;
+import com.vlz.laborexchange_applicationservice.client.ResumeServiceClient;
 import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,21 +16,8 @@ import java.io.IOException;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class UserRetryClient {
-
-    private final UserServiceClient userServiceClient;
-
-    @Retryable(
-            retryFor = {FeignException.class, IOException.class},
-            maxAttemptsExpression = "${spring.retry.max-attempts}",
-            backoff = @Backoff(
-                    delayExpression = "${spring.retry.delay}"
-            )
-    )
-    public String getEmailByUserId(Long userId) {
-        log.info("Attempting to fetch email for user id: {}", userId);
-        return userServiceClient.getEmailById(userId);
-    }
+public class ResumeRetryClient {
+    private final ResumeServiceClient resumeServiceClient;
 
     @Retryable(
             retryFor = {FeignException.class, IOException.class},
@@ -39,13 +26,13 @@ public class UserRetryClient {
                     delayExpression = "${spring.retry.delay}"
             )
     )
-    public String getUsernameByUserId(Long candidateId) {
-        log.info("Attempting to fetch username for candidate id: {}", candidateId);
-        return userServiceClient.getUsernameByUserId(candidateId);
+    public String getResumeTitle(Long id) {
+        log.info("Attempting to fetch email for user id: {}", id);
+        return resumeServiceClient.getResumeTitle(id);
     }
 
     @Recover
-    public String recoverEmailByUserId(Exception e, Long userId) {
+    public String recoverGetResumeTitle(Exception e, Long userId) {
         log.error("Failed to fetch email for user id after retries: {}. Error: {}",
                 userId, e.getMessage());
         throw new ResponseStatusException(

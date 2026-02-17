@@ -21,9 +21,20 @@ public interface ApplicationRepository extends JpaRepository<Application, Long> 
     @Query("SELECT COUNT(a) FROM Application a WHERE a.status.code = :status")
     Long countByStatus(@Param("status") ApplicationStatusType status);
 
+    @Query("SELECT COUNT(a) FROM Application a WHERE a.employerId = :employerId AND a.status.code = :status")
+    Long countByEmployerIdAndStatus(@Param("employerId") Long employerId, @Param("status") ApplicationStatusType status);
+
     @Query("SELECT a.status.code, COUNT(a) FROM Application a GROUP BY a.status.code")
     List<Object[]> countByStatusGrouped();
 
+    @Query("SELECT a.status.code, COUNT(a) FROM Application a WHERE a.employerId = :employerId GROUP BY a.status.code")
+    List<Object[]> countByEmployerIdAndStatusGrouped(@Param("employerId") Long employerId);
+
     @Query("SELECT COUNT(a) FROM Application a WHERE a.status.code IN :statuses")
     Long countByStatusIn(@Param("statuses") List<ApplicationStatusType> statuses);
+
+    @Query("SELECT COUNT(a) FROM Application a WHERE a.employerId = :employerId AND a.status.code IN :statuses")
+    Long countByEmployerIdAndStatusIn(@Param("employerId") Long employerId, @Param("statuses") List<ApplicationStatusType> statuses);
+
+    Long countByEmployerId(Long employerId);
 }

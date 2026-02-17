@@ -19,9 +19,16 @@ spring:
     vacancy-service:
       name: vacancy-service
       url: http://localhost:8083
+    company-service:
+      name: company-service
+      url: http://localhost:8083
+    resume-service:
+      name: resume-service
+      url: http://localhost:8084
     user-service:
       name: user-service
       url: http://localhost:8082
+
 
   retry:
     max-attempts: 3

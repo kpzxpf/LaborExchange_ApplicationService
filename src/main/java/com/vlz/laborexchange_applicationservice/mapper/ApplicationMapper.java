@@ -11,10 +11,4 @@ public interface ApplicationMapper {
 
     @Mapping(source = "status.name", target = "statusName")
     ApplicationResponseDto toDto(Application entity);
-
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "status", ignore = true)
-    @Mapping(target = "createdAt", ignore = true)
-    @Mapping(target = "updatedAt", ignore = true)
-    Application toEntity(ApplicationRequestDto dto);
 }

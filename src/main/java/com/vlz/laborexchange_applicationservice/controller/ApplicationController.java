@@ -23,9 +23,7 @@ public class ApplicationController {
 
     @PostMapping
     public ApplicationResponseDto create(@Valid @RequestBody ApplicationRequestDto requestDto) {
-        Application entity = applicationMapper.toEntity(requestDto);
-
-        Application saved = applicationService.createApplication(entity);
+        Application saved = applicationService.createApplication(requestDto);
         return applicationMapper.toDto(saved);
     }
 
@@ -37,51 +35,47 @@ public class ApplicationController {
 
     @GetMapping("/vacancy/{vacancyId}")
     public List<ApplicationResponseDto> getByVacancy(@PathVariable Long vacancyId) {
-        return applicationService.getApplicationsByVacancy(vacancyId).stream()
-                .map(applicationMapper::toDto)
-                .toList();
+        return applicationService.getApplicationsByVacancy(vacancyId);
     }
 
     @GetMapping("/candidate/{candidateId}")
     public List<ApplicationResponseDto> getByCandidate(@PathVariable Long candidateId) {
-        return applicationService.getApplicationsByCandidate(candidateId).stream()
-                .map(applicationMapper::toDto)
-                .toList();
+        return applicationService.getApplicationsByCandidate(candidateId);
     }
 
     @PostMapping("/reject")
     public ApplicationResponseDto rejectApplication(@Valid @RequestBody ApplicationRequestDto requestDto) {
-        Application saved = applicationService.rejectApplication(applicationMapper.toEntity(requestDto));
+        Application saved = applicationService.rejectApplication(requestDto);
 
         return applicationMapper.toDto(saved);
     }
 
     @PostMapping("/withdrawn")
     public ApplicationResponseDto withdrawnApplication(@Valid @RequestBody ApplicationRequestDto requestDto) {
-        Application saved = applicationService.withdrawnApplication(applicationMapper.toEntity(requestDto));
+        Application saved = applicationService.withdrawnApplication(requestDto);
 
         return applicationMapper.toDto(saved);
     }
 
     @GetMapping("/employer/{employerId}")
     public List<ApplicationResponseDto> getByEmployer(@PathVariable Long employerId) {
-        return applicationService.getApplicationsByEmployer(employerId).stream()
-                .map(applicationMapper::toDto)
-                .toList();
+        return applicationService.getApplicationsByEmployer(employerId);
     }
-
 
     @GetMapping("/status/{status}")
     public List<ApplicationResponseDto> getByStatus(@PathVariable String status) {
         ApplicationStatusType statusType = ApplicationStatusType.valueOf(status.toUpperCase());
 
-        return applicationService.getApplicationsByStatus(statusType).stream()
-                .map(applicationMapper::toDto)
-                .toList();
+        return applicationService.getApplicationsByStatus(statusType);
     }
 
     @GetMapping("/statistics")
     public ApplicationStatisticsDto getStatistics() {
         return applicationService.getStatistics();
+    }
+
+    @GetMapping("/employer/{employerId}/statistics")
+    public ApplicationStatisticsDto getEmployerStatistics(@PathVariable Long employerId) {
+        return applicationService.getEmployerStatistics(employerId);
     }
 }

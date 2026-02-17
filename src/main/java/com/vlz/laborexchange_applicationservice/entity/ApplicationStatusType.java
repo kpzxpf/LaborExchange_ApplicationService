@@ -7,8 +7,8 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public enum ApplicationStatusType {
     NEW(1),
-    REJECTED(3),
-    WITHDRAWN(4);
+    REJECTED(2),
+    WITHDRAWN(3);
 
     private final Integer id;
 }

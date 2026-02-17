@@ -12,4 +12,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 public interface VacancyClient {
     @GetMapping("/api/vacancies/{id}")
     VacancyDto getById(@PathVariable Long id);
+
+    @GetMapping("/api/vacancies/{id}/title")
+    String getVacancyTitle(@PathVariable Long id);
+
+    @GetMapping("/api/vacancies/{id}/company")
+    String getCompanyName(@PathVariable Long id);
 }

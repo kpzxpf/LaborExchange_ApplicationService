@@ -2,6 +2,7 @@ package com.vlz.laborexchange_applicationservice.client;
 
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 
 @FeignClient(
@@ -11,4 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 public interface UserServiceClient {
     @GetMapping("/api/users/emailById")
     String getEmailById(@RequestParam("id") Long id);
+
+    @GetMapping("/api/users/{userId}/username")
+    String getUsernameByUserId(@PathVariable Long userId);
 }

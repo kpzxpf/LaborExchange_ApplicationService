@@ -11,6 +11,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ApplicationRequestDto {
+
+    private Long id;
     @NotNull
     private Long vacancyId;
 
