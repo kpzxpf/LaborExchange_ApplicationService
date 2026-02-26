@@ -10,19 +10,19 @@ import com.vlz.laborexchange_applicationservice.producer.RejectedApplicationNoti
 import com.vlz.laborexchange_applicationservice.producer.WithdrawnApplicationProducer;
 import com.vlz.laborexchange_applicationservice.repository.ApplicationRepository;
 import jakarta.persistence.EntityNotFoundException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ApplicationService {
 
     private final ApplicationRepository applicationRepository;
@@ -34,6 +34,30 @@ public class ApplicationService {
     private final ApplicationMapper applicationMapper;
     private final ResumeRetryClient resumeRetryClient;
     private final CompanyRetryClient companyRetryClient;
+    private final ExecutorService notificationExecutor;
+
+    public ApplicationService(
+            ApplicationRepository applicationRepository,
+            NewApplicationNotificationProducer newApplicationNotificationProducer,
+            RejectedApplicationNotificationProducer rejectedApplicationNotificationProducer,
+            WithdrawnApplicationProducer withdrawnApplicationProducer,
+            VacancyRetryClient vacancyRetryClient,
+            UserRetryClient userRetryClient,
+            ApplicationMapper applicationMapper,
+            ResumeRetryClient resumeRetryClient,
+            CompanyRetryClient companyRetryClient,
+            @Qualifier("notificationExecutor") ExecutorService notificationExecutor) {
+        this.applicationRepository = applicationRepository;
+        this.newApplicationNotificationProducer = newApplicationNotificationProducer;
+        this.rejectedApplicationNotificationProducer = rejectedApplicationNotificationProducer;
+        this.withdrawnApplicationProducer = withdrawnApplicationProducer;
+        this.vacancyRetryClient = vacancyRetryClient;
+        this.userRetryClient = userRetryClient;
+        this.applicationMapper = applicationMapper;
+        this.resumeRetryClient = resumeRetryClient;
+        this.companyRetryClient = companyRetryClient;
+        this.notificationExecutor = notificationExecutor;
+    }
 
     @Transactional
     public Application createApplication(ApplicationRequestDto applicationDto) {
@@ -55,7 +79,7 @@ public class ApplicationService {
                 .applicationId(savedApplication.getId())
                 .employerEmail(userRetryClient.getEmailByUserId(savedApplication.getEmployerId()))
                 .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
-                .build()));
+                .build()), notificationExecutor);
 
         return savedApplication;
     }
@@ -72,7 +96,7 @@ public class ApplicationService {
                 .applicationId(savedApplication.getId())
                 .candidateEmail(userRetryClient.getEmailByUserId(savedApplication.getCandidateId()))
                 .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
-                .build()));
+                .build()), notificationExecutor);
 
         return savedApplication;
     }
@@ -88,8 +112,41 @@ public class ApplicationService {
                 .applicationId(savedApplication.getId())
                 .employerEmail(userRetryClient.getEmailByUserId(savedApplication.getCandidateId()))
                 .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
-                .build()));
+                .build()), notificationExecutor);
 
+        return savedApplication;
+    }
+
+    @Transactional
+    public Application acceptApplication(Long id) {
+        Application application = getById(id);
+        application.setStatusFromType(ApplicationStatusType.ACCEPTED);
+        return applicationRepository.save(application);
+    }
+
+    @Transactional
+    public Application rejectApplicationById(Long id) {
+        Application application = getById(id);
+        application.setStatusFromType(ApplicationStatusType.REJECTED);
+        Application savedApplication = applicationRepository.save(application);
+        CompletableFuture.runAsync(() -> rejectedApplicationNotificationProducer.send(RejectedApplicationEvent.builder()
+                .applicationId(savedApplication.getId())
+                .candidateEmail(userRetryClient.getEmailByUserId(savedApplication.getCandidateId()))
+                .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
+                .build()), notificationExecutor);
+        return savedApplication;
+    }
+
+    @Transactional
+    public Application withdrawApplicationById(Long id) {
+        Application application = getById(id);
+        application.setStatusFromType(ApplicationStatusType.WITHDRAWN);
+        Application savedApplication = applicationRepository.save(application);
+        CompletableFuture.runAsync(() -> withdrawnApplicationProducer.send(WithdrawnApplicationEvent.builder()
+                .applicationId(savedApplication.getId())
+                .employerEmail(userRetryClient.getEmailByUserId(savedApplication.getCandidateId()))
+                .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
+                .build()), notificationExecutor);
         return savedApplication;
     }
 

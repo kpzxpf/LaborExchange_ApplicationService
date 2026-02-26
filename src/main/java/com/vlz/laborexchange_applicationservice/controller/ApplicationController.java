@@ -33,6 +33,26 @@ public class ApplicationController {
         return applicationMapper.toDto(entity);
     }
 
+    @GetMapping("/my")
+    public List<ApplicationResponseDto> getMy(@RequestHeader("X-User-Id") Long userId) {
+        return applicationService.getApplicationsByCandidate(userId);
+    }
+
+    @PatchMapping("/{id}/accept")
+    public ApplicationResponseDto accept(@PathVariable Long id) {
+        return applicationMapper.toDto(applicationService.acceptApplication(id));
+    }
+
+    @PatchMapping("/{id}/reject")
+    public ApplicationResponseDto reject(@PathVariable Long id) {
+        return applicationMapper.toDto(applicationService.rejectApplicationById(id));
+    }
+
+    @PatchMapping("/{id}/withdraw")
+    public ApplicationResponseDto withdraw(@PathVariable Long id) {
+        return applicationMapper.toDto(applicationService.withdrawApplicationById(id));
+    }
+
     @GetMapping("/vacancy/{vacancyId}")
     public List<ApplicationResponseDto> getByVacancy(@PathVariable Long vacancyId) {
         return applicationService.getApplicationsByVacancy(vacancyId);

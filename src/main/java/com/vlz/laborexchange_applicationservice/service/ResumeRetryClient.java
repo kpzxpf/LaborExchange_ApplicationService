@@ -27,16 +27,16 @@ public class ResumeRetryClient {
             )
     )
     public String getResumeTitle(Long id) {
-        log.info("Attempting to fetch email for user id: {}", id);
+        log.info("Attempting to fetch title for resume id: {}", id);
         return resumeServiceClient.getResumeTitle(id);
     }
 
     @Recover
-    public String recoverGetResumeTitle(Exception e, Long userId) {
-        log.error("Failed to fetch email for user id after retries: {}. Error: {}",
-                userId, e.getMessage());
+    public String recoverGetResumeTitle(Exception e, Long resumeId) {
+        log.error("Failed to fetch title for resume id after retries: {}. Error: {}",
+                resumeId, e.getMessage());
         throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
-                "User service is currently unavailable", e);
+                "Resume service is currently unavailable", e);
     }
 }
