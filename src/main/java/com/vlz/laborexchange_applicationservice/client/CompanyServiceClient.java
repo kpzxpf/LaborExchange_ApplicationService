@@ -8,6 +8,6 @@ import org.springframework.web.bind.annotation.PathVariable;
         url = "${spring.clients.company-service.url}")
 public interface CompanyServiceClient {
 
-    @GetMapping("/api/companies/{id}/company")
+    @GetMapping("/api/vacancies/{id}/company-name")
     String getCompanyName(@PathVariable Long id);
 }

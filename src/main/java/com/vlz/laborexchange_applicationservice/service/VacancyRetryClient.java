@@ -2,6 +2,7 @@ package com.vlz.laborexchange_applicationservice.service;
 
 import com.vlz.laborexchange_applicationservice.client.VacancyClient;
 import feign.FeignException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,7 @@ public class VacancyRetryClient {
 
     private final VacancyClient vacancyClient;
 
+    @CircuitBreaker(name = "vacancyService", fallbackMethod = "getVacancyTitleFallback")
     @Retryable(
             retryFor = {FeignException.class, IOException.class},
             maxAttemptsExpression = "${spring.retry.max-attempts}",
@@ -30,6 +32,11 @@ public class VacancyRetryClient {
     public String getVacancyTitle(Long id) {
         log.info("Attempting to fetch vacancy title for id: {}", id);
         return vacancyClient.getById(id).getTitle();
+    }
+
+    public String getVacancyTitleFallback(Long id, Exception e) {
+        log.warn("VacancyService circuit breaker open for title, vacancyId={}: {}", id, e.getMessage());
+        return "Vacancy";
     }
 
     @Recover

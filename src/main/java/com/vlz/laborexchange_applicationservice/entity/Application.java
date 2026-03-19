@@ -11,6 +11,8 @@ import java.time.LocalDateTime;
 @Table(name = "applications")
 @Getter
 @Setter
+@EqualsAndHashCode(of = "id")
+@ToString(exclude = "status")
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor

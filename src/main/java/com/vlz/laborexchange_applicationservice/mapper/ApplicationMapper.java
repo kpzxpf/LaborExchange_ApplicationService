@@ -9,6 +9,7 @@ import org.mapstruct.Mapping;
 @Mapper(componentModel = "spring")
 public interface ApplicationMapper {
 
-    @Mapping(source = "status.code", target = "statusName")
+    @Mapping(source = "status.name", target = "statusName")
+    @Mapping(source = "status.code", target = "statusCode")
     ApplicationResponseDto toDto(Application entity);
 }

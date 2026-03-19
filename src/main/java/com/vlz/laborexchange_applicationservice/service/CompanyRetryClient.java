@@ -1,8 +1,8 @@
 package com.vlz.laborexchange_applicationservice.service;
 
 import com.vlz.laborexchange_applicationservice.client.CompanyServiceClient;
-import com.vlz.laborexchange_applicationservice.client.UserServiceClient;
 import feign.FeignException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -20,6 +20,7 @@ import java.io.IOException;
 public class CompanyRetryClient {
     private final CompanyServiceClient companyServiceClient;
 
+    @CircuitBreaker(name = "companyService", fallbackMethod = "getCompanyNameFallback")
     @Retryable(
             retryFor = {FeignException.class, IOException.class},
             maxAttemptsExpression = "${spring.retry.max-attempts}",
@@ -28,16 +29,21 @@ public class CompanyRetryClient {
             )
     )
     public String getCompanyName(Long id) {
-        log.info("Attempting to fetch email for user id: {}", id);
+        log.info("Attempting to fetch company name for id: {}", id);
         return companyServiceClient.getCompanyName(id);
     }
 
+    public String getCompanyNameFallback(Long id, Exception e) {
+        log.warn("CompanyService circuit breaker open for company name, companyId={}: {}", id, e.getMessage());
+        return "Company";
+    }
+
     @Recover
-    public String recoverGetCompanyName(Exception e, Long userId) {
-        log.error("Failed to fetch email for user id after retries: {}. Error: {}",
-                userId, e.getMessage());
+    public String recoverGetCompanyName(Exception e, Long vacancyId) {
+        log.error("Failed to fetch company name after retries for vacancyId: {}. Error: {}",
+                vacancyId, e.getMessage());
         throw new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
-                "User service is currently unavailable", e);
+                "Company service is currently unavailable", e);
     }
 }

@@ -8,15 +8,14 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
-import java.util.Optional;
 
 @Repository
 public interface ApplicationRepository extends JpaRepository<Application, Long> {
-    Optional<List<Application>> findByVacancyId(Long vacancyId);
-    Optional<List<Application>> findByCandidateId(Long candidateId);
+    List<Application> findByVacancyId(Long vacancyId);
+    List<Application> findByCandidateId(Long candidateId);
     boolean existsByVacancyIdAndCandidateIdAndResumeId(Long vacancyId, Long candidateId, Long resumeId);
-    Optional<List<Application>> findByStatus_Code(ApplicationStatusType statusType);
-    Optional<List<Application>> findByEmployerId(Long employerId);
+    List<Application> findByStatus_Code(ApplicationStatusType statusType);
+    List<Application> findByEmployerId(Long employerId);
 
     @Query("SELECT COUNT(a) FROM Application a WHERE a.status.code = :status")
     Long countByStatus(@Param("status") ApplicationStatusType status);

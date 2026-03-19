@@ -2,6 +2,7 @@ package com.vlz.laborexchange_applicationservice.service;
 
 import com.vlz.laborexchange_applicationservice.client.UserServiceClient;
 import feign.FeignException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -20,6 +21,7 @@ public class UserRetryClient {
 
     private final UserServiceClient userServiceClient;
 
+    @CircuitBreaker(name = "userService", fallbackMethod = "getEmailFallback")
     @Retryable(
             retryFor = {FeignException.class, IOException.class},
             maxAttemptsExpression = "${spring.retry.max-attempts}",
@@ -32,6 +34,12 @@ public class UserRetryClient {
         return userServiceClient.getEmailById(userId);
     }
 
+    public String getEmailFallback(Long userId, Exception e) {
+        log.warn("UserService circuit breaker open for email, userId={}: {}", userId, e.getMessage());
+        return null;
+    }
+
+    @CircuitBreaker(name = "userService", fallbackMethod = "getUsernameFallback")
     @Retryable(
             retryFor = {FeignException.class, IOException.class},
             maxAttemptsExpression = "${spring.retry.max-attempts}",
@@ -42,6 +50,11 @@ public class UserRetryClient {
     public String getUsernameByUserId(Long candidateId) {
         log.info("Attempting to fetch username for candidate id: {}", candidateId);
         return userServiceClient.getUsernameByUserId(candidateId);
+    }
+
+    public String getUsernameFallback(Long candidateId, Exception e) {
+        log.warn("UserService circuit breaker open, returning fallback for userId={}: {}", candidateId, e.getMessage());
+        return "Unknown User";
     }
 
     @Recover

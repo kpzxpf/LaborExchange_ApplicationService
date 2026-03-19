@@ -450,6 +450,5 @@ curl -X POST http://localhost:8085/api/applications \
 
 <div align="center">
 
-**Made with ❤️ by the LaborExchange Team**
 
 </div>

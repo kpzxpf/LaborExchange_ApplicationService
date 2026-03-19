@@ -15,8 +15,12 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
@@ -61,6 +65,10 @@ public class ApplicationService {
 
     @Transactional
     public Application createApplication(ApplicationRequestDto applicationDto) {
+        // Bug 18: duplicate check before building the entity
+        existsByVacancyIdAndCandidateIdAndResumeId(
+                applicationDto.getVacancyId(), applicationDto.getCandidateId(), applicationDto.getResumeId());
+
         Application application = Application.builder()
                 .vacancyId(applicationDto.getVacancyId())
                 .candidateId(applicationDto.getCandidateId())
@@ -69,9 +77,6 @@ public class ApplicationService {
                 .build();
 
         application.setStatusFromType(ApplicationStatusType.NEW);
-
-        existsByVacancyIdAndCandidateIdAndResumeId(
-                application.getVacancyId(), application.getCandidateId(), application.getResumeId());
 
         Application savedApplication = applicationRepository.save(application);
 
@@ -110,7 +115,7 @@ public class ApplicationService {
 
         CompletableFuture.runAsync(() -> withdrawnApplicationProducer.send(WithdrawnApplicationEvent.builder()
                 .applicationId(savedApplication.getId())
-                .employerEmail(userRetryClient.getEmailByUserId(savedApplication.getCandidateId()))
+                .employerEmail(userRetryClient.getEmailByUserId(savedApplication.getEmployerId()))
                 .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
                 .build()), notificationExecutor);
 
@@ -118,15 +123,25 @@ public class ApplicationService {
     }
 
     @Transactional
-    public Application acceptApplication(Long id) {
+    public Application acceptApplication(Long id, Long userId, String userRole) {
         Application application = getById(id);
+        // Employer must own the vacancy (employerId on application) to accept
+        if (!"EMPLOYER".equals(userRole) || !application.getEmployerId().equals(userId)) {
+            log.warn("Access denied: user {} role {} attempted to accept application {}", userId, userRole, id);
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the employer who owns this vacancy can accept applications");
+        }
         application.setStatusFromType(ApplicationStatusType.ACCEPTED);
         return applicationRepository.save(application);
     }
 
     @Transactional
-    public Application rejectApplicationById(Long id) {
+    public Application rejectApplicationById(Long id, Long userId, String userRole) {
         Application application = getById(id);
+        // Employer must own the vacancy (employerId on application) to reject
+        if (!"EMPLOYER".equals(userRole) || !application.getEmployerId().equals(userId)) {
+            log.warn("Access denied: user {} role {} attempted to reject application {}", userId, userRole, id);
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the employer who owns this vacancy can reject applications");
+        }
         application.setStatusFromType(ApplicationStatusType.REJECTED);
         Application savedApplication = applicationRepository.save(application);
         CompletableFuture.runAsync(() -> rejectedApplicationNotificationProducer.send(RejectedApplicationEvent.builder()
@@ -138,13 +153,18 @@ public class ApplicationService {
     }
 
     @Transactional
-    public Application withdrawApplicationById(Long id) {
+    public Application withdrawApplicationById(Long id, Long userId, String userRole) {
         Application application = getById(id);
+        // Candidate must own the application to withdraw
+        if (!"JOB_SEEKER".equals(userRole) || !application.getCandidateId().equals(userId)) {
+            log.warn("Access denied: user {} role {} attempted to withdraw application {}", userId, userRole, id);
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the candidate who submitted this application can withdraw it");
+        }
         application.setStatusFromType(ApplicationStatusType.WITHDRAWN);
         Application savedApplication = applicationRepository.save(application);
         CompletableFuture.runAsync(() -> withdrawnApplicationProducer.send(WithdrawnApplicationEvent.builder()
                 .applicationId(savedApplication.getId())
-                .employerEmail(userRetryClient.getEmailByUserId(savedApplication.getCandidateId()))
+                .employerEmail(userRetryClient.getEmailByUserId(savedApplication.getEmployerId()))
                 .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
                 .build()), notificationExecutor);
         return savedApplication;
@@ -161,43 +181,76 @@ public class ApplicationService {
 
     @Transactional(readOnly = true)
     public List<ApplicationResponseDto> getApplicationsByVacancy(Long vacancyId) {
-        List<Application> applications = applicationRepository.findByVacancyId(vacancyId)
-                .orElseThrow(() -> {
-                    log.error("Applications Not Found by VacancyId {}", vacancyId);
-                    return new EntityNotFoundException("Applications not found");
-                });
+        List<Application> applications = applicationRepository.findByVacancyId(vacancyId);
 
-        return applications.stream()
+        List<ApplicationResponseDto> dtos = applications.stream()
                 .map(applicationMapper::toDto)
-                .map(this::enrichApplicationDto)
+                .collect(Collectors.toList());
+
+        List<CompletableFuture<ApplicationResponseDto>> futures = dtos.stream()
+                .map(dto -> CompletableFuture.supplyAsync(() -> enrichApplicationDto(dto), notificationExecutor))
+                .collect(Collectors.toList());
+
+        return futures.stream()
+                .map(f -> {
+                    try { return f.get(10, java.util.concurrent.TimeUnit.SECONDS); }
+                    catch (Exception e) {
+                        if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+                        log.warn("Failed to fetch enriched application DTO: {}", e.getMessage());
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<ApplicationResponseDto> getApplicationsByCandidate(Long candidateId) {
-        List<Application> applications = applicationRepository.findByCandidateId(candidateId)
-                .orElseThrow(() -> {
-                    log.error("Applications Not Found by CandidateId {}", candidateId);
-                    return new EntityNotFoundException("Applications not found");
-                });
+        List<Application> applications = applicationRepository.findByCandidateId(candidateId);
 
-        return applications.stream()
+        List<ApplicationResponseDto> dtos = applications.stream()
                 .map(applicationMapper::toDto)
-                .map(this::enrichApplicationDto)
+                .collect(Collectors.toList());
+
+        List<CompletableFuture<ApplicationResponseDto>> futures = dtos.stream()
+                .map(dto -> CompletableFuture.supplyAsync(() -> enrichApplicationDto(dto), notificationExecutor))
+                .collect(Collectors.toList());
+
+        return futures.stream()
+                .map(f -> {
+                    try { return f.get(10, java.util.concurrent.TimeUnit.SECONDS); }
+                    catch (Exception e) {
+                        if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+                        log.warn("Failed to fetch enriched application DTO: {}", e.getMessage());
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<ApplicationResponseDto> getApplicationsByStatus(ApplicationStatusType statusType) {
-        List<Application> applications = applicationRepository.findByStatus_Code(statusType)
-                .orElseThrow(() -> {
-                    log.error("Applications not found for status {}", statusType);
-                    return new EntityNotFoundException("No applications found for status: " + statusType);
-                });
+        List<Application> applications = applicationRepository.findByStatus_Code(statusType);
 
-        return applications.stream()
+        List<ApplicationResponseDto> dtos = applications.stream()
                 .map(applicationMapper::toDto)
-                .map(this::enrichApplicationDto)
+                .collect(Collectors.toList());
+
+        List<CompletableFuture<ApplicationResponseDto>> futures = dtos.stream()
+                .map(dto -> CompletableFuture.supplyAsync(() -> enrichApplicationDto(dto), notificationExecutor))
+                .collect(Collectors.toList());
+
+        return futures.stream()
+                .map(f -> {
+                    try { return f.get(10, java.util.concurrent.TimeUnit.SECONDS); }
+                    catch (Exception e) {
+                        if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+                        log.warn("Failed to fetch enriched application DTO: {}", e.getMessage());
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
@@ -205,15 +258,26 @@ public class ApplicationService {
     public List<ApplicationResponseDto> getApplicationsByEmployer(Long employerId) {
         log.info("Fetching applications for employer: {}", employerId);
 
-        List<Application> applications = applicationRepository.findByEmployerId(employerId)
-                .orElseThrow(() -> {
-                    log.error("Applications Not Found by EmployerId {}", employerId);
-                    return new EntityNotFoundException("Applications not found for employer: " + employerId);
-                });
+        List<Application> applications = applicationRepository.findByEmployerId(employerId);
 
-        return applications.stream()
+        List<ApplicationResponseDto> dtos = applications.stream()
                 .map(applicationMapper::toDto)
-                .map(this::enrichApplicationDto)
+                .collect(Collectors.toList());
+
+        List<CompletableFuture<ApplicationResponseDto>> futures = dtos.stream()
+                .map(dto -> CompletableFuture.supplyAsync(() -> enrichApplicationDto(dto), notificationExecutor))
+                .collect(Collectors.toList());
+
+        return futures.stream()
+                .map(f -> {
+                    try { return f.get(10, java.util.concurrent.TimeUnit.SECONDS); }
+                    catch (Exception e) {
+                        if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+                        log.warn("Failed to fetch enriched application DTO: {}", e.getMessage());
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 
@@ -230,8 +294,7 @@ public class ApplicationService {
 
         List<ApplicationStatusType> activeStatuses = List.of(
                 ApplicationStatusType.NEW,
-                ApplicationStatusType.WITHDRAWN,
-                ApplicationStatusType.REJECTED
+                ApplicationStatusType.ACCEPTED
         );
         Long active = applicationRepository.countByStatusIn(activeStatuses);
 
@@ -261,8 +324,7 @@ public class ApplicationService {
 
         List<ApplicationStatusType> activeStatuses = List.of(
                 ApplicationStatusType.NEW,
-                ApplicationStatusType.WITHDRAWN,
-                ApplicationStatusType.REJECTED
+                ApplicationStatusType.ACCEPTED
         );
         Long active = applicationRepository.countByEmployerIdAndStatusIn(employerId, activeStatuses);
 
@@ -290,21 +352,35 @@ public class ApplicationService {
 
     private ApplicationResponseDto enrichApplicationDto(ApplicationResponseDto dto) {
         try {
-            String vacancyTitle = vacancyRetryClient.getVacancyTitle(dto.getVacancyId());
-            String companyName = companyRetryClient.getCompanyName(dto.getVacancyId());
+            CompletableFuture<String> vacancyTitleFuture = CompletableFuture.supplyAsync(
+                () -> vacancyRetryClient.getVacancyTitle(dto.getVacancyId()), notificationExecutor);
 
-            String candidateName = userRetryClient.getUsernameByUserId(dto.getCandidateId());
-            String candidateEmail = userRetryClient.getEmailByUserId(dto.getCandidateId());
+            CompletableFuture<String> companyNameFuture = CompletableFuture.supplyAsync(
+                () -> companyRetryClient.getCompanyName(dto.getVacancyId()), notificationExecutor);
 
-            String resumeTitle = resumeRetryClient.getResumeTitle(dto.getResumeId());
+            CompletableFuture<String> candidateNameFuture = CompletableFuture.supplyAsync(
+                () -> userRetryClient.getUsernameByUserId(dto.getCandidateId()), notificationExecutor);
 
-            dto.setVacancyTitle(vacancyTitle);
-            dto.setCompanyName(companyName);
-            dto.setCandidateName(candidateName);
-            dto.setCandidateEmail(candidateEmail);
-            dto.setResumeTitle(resumeTitle);
+            CompletableFuture<String> candidateEmailFuture = CompletableFuture.supplyAsync(
+                () -> userRetryClient.getEmailByUserId(dto.getCandidateId()), notificationExecutor);
+
+            CompletableFuture<String> resumeTitleFuture = CompletableFuture.supplyAsync(
+                () -> resumeRetryClient.getResumeTitle(dto.getResumeId()), notificationExecutor);
+
+            CompletableFuture.allOf(
+                vacancyTitleFuture, companyNameFuture,
+                candidateNameFuture, candidateEmailFuture, resumeTitleFuture
+            ).get(5, java.util.concurrent.TimeUnit.SECONDS);
+
+            dto.setVacancyTitle(vacancyTitleFuture.getNow("Unknown Vacancy"));
+            dto.setCompanyName(companyNameFuture.getNow("Unknown Company"));
+            dto.setCandidateName(candidateNameFuture.getNow("Unknown User"));
+            dto.setCandidateEmail(candidateEmailFuture.getNow(null));
+            dto.setResumeTitle(resumeTitleFuture.getNow("Resume"));
+
         } catch (Exception e) {
-            log.warn("Failed to enrich application DTO: {}", e.getMessage());
+            if (e instanceof InterruptedException) Thread.currentThread().interrupt();
+            log.warn("Failed to enrich application DTO {}: {}", dto.getId(), e.getMessage());
         }
 
         return dto;
