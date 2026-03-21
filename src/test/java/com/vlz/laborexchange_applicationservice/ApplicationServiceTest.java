@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -51,6 +52,12 @@ class ApplicationServiceTest {
 
     private ApplicationService applicationService;
     private ExecutorService executor;
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() throws InterruptedException {
+        executor.shutdown();
+        executor.awaitTermination(5, TimeUnit.SECONDS);
+    }
 
     @BeforeEach
     void setUp() {
@@ -125,7 +132,7 @@ class ApplicationServiceTest {
         when(applicationRepository.findById(1L)).thenReturn(Optional.of(application));
         when(applicationRepository.save(any(Application.class))).thenReturn(accepted);
 
-        Application result = applicationService.acceptApplication(1L);
+        Application result = applicationService.acceptApplication(1L, 30L, "EMPLOYER");
 
         assertThat(result.getStatusFromType()).isEqualTo(ApplicationStatusType.ACCEPTED);
     }
@@ -140,7 +147,7 @@ class ApplicationServiceTest {
         when(userRetryClient.getEmailByUserId(anyLong())).thenReturn("cand@test.com");
         when(vacancyRetryClient.getVacancyTitle(anyLong())).thenReturn("Title");
 
-        Application result = applicationService.rejectApplicationById(1L);
+        Application result = applicationService.rejectApplicationById(1L, 30L, "EMPLOYER");
 
         assertThat(result.getStatusFromType()).isEqualTo(ApplicationStatusType.REJECTED);
     }
@@ -155,7 +162,7 @@ class ApplicationServiceTest {
         when(userRetryClient.getEmailByUserId(anyLong())).thenReturn("emp@test.com");
         when(vacancyRetryClient.getVacancyTitle(anyLong())).thenReturn("Title");
 
-        Application result = applicationService.withdrawApplicationById(1L);
+        Application result = applicationService.withdrawApplicationById(1L, 20L, "JOB_SEEKER");
 
         assertThat(result.getStatusFromType()).isEqualTo(ApplicationStatusType.WITHDRAWN);
     }
@@ -213,7 +220,7 @@ class ApplicationServiceTest {
         dto.setEmployerId(30L);
         dto.setResumeId(40L);
 
-        when(applicationRepository.findByEmployerId(30L)).thenReturn(Optional.of(List.of(app)));
+        when(applicationRepository.findByEmployerId(30L)).thenReturn(List.of(app));
         when(applicationMapper.toDto(app)).thenReturn(dto);
         when(vacancyRetryClient.getVacancyTitle(anyLong())).thenReturn("Title");
         when(companyRetryClient.getCompanyName(anyLong())).thenReturn("Company");

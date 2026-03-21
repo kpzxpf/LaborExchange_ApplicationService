@@ -18,7 +18,7 @@ jobs:
           POSTGRES_USER: applicationuser
           POSTGRES_PASSWORD: applicationpass
         ports:
-          - 5434:5432
+          - 5437:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s

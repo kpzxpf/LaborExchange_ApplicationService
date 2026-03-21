@@ -19,6 +19,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -78,6 +81,7 @@ class ApplicationControllerTest {
 
         mockMvc.perform(post("/api/applications")
                         .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-User-Id", "20")
                         .content(objectMapper.writeValueAsString(requestDto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(1))
@@ -114,10 +118,12 @@ class ApplicationControllerTest {
         Application accepted = buildApplication(1L, ApplicationStatusType.ACCEPTED);
         ApplicationResponseDto responseDto = buildResponseDto(1L, ApplicationStatusType.ACCEPTED);
 
-        when(applicationService.acceptApplication(1L)).thenReturn(accepted);
+        when(applicationService.acceptApplication(eq(1L), anyLong(), anyString())).thenReturn(accepted);
         when(applicationMapper.toDto(accepted)).thenReturn(responseDto);
 
-        mockMvc.perform(patch("/api/applications/1/accept"))
+        mockMvc.perform(patch("/api/applications/1/accept")
+                        .header("X-User-Id", "30")
+                        .header("X-User-Role", "EMPLOYER"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusName").value("ACCEPTED"));
     }
@@ -127,10 +133,12 @@ class ApplicationControllerTest {
         Application rejected = buildApplication(1L, ApplicationStatusType.REJECTED);
         ApplicationResponseDto responseDto = buildResponseDto(1L, ApplicationStatusType.REJECTED);
 
-        when(applicationService.rejectApplicationById(1L)).thenReturn(rejected);
+        when(applicationService.rejectApplicationById(eq(1L), anyLong(), anyString())).thenReturn(rejected);
         when(applicationMapper.toDto(rejected)).thenReturn(responseDto);
 
-        mockMvc.perform(patch("/api/applications/1/reject"))
+        mockMvc.perform(patch("/api/applications/1/reject")
+                        .header("X-User-Id", "30")
+                        .header("X-User-Role", "EMPLOYER"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.statusName").value("REJECTED"));
     }
