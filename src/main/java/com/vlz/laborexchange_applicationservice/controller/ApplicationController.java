@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Tag(name = "Applications", description = "Job application lifecycle management")
+@Tag(name = "Applications", description = "CRUD and status transitions for job applications")
 @RestController
 @RequestMapping("/api/applications")
 @RequiredArgsConstructor
@@ -34,6 +35,7 @@ public class ApplicationController {
     // Create
     // -------------------------------------------------------------------------
 
+    @SecurityRequirement(name = "Bearer Authentication")
     @Operation(
             summary = "Submit a job application",
             description = "Creates a new application for a vacancy. Candidate ID is taken from the `X-User-Id` header (set by the Gateway). Publishes a NEW notification event to Kafka."
@@ -71,6 +73,7 @@ public class ApplicationController {
         return applicationMapper.toDto(entity);
     }
 
+    @SecurityRequirement(name = "Bearer Authentication")
     @Operation(summary = "Get my applications", description = "Returns all applications submitted by the authenticated candidate (identified via `X-User-Id`).")
     @ApiResponse(responseCode = "200", description = "List of applications",
             content = @Content(array = @ArraySchema(schema = @Schema(implementation = ApplicationResponseDto.class))))
@@ -126,6 +129,7 @@ public class ApplicationController {
     // Status transitions
     // -------------------------------------------------------------------------
 
+    @SecurityRequirement(name = "Bearer Authentication")
     @Operation(
             summary = "Accept an application",
             description = "Marks the application as ACCEPTED. Only the employer who owns the vacancy may perform this action."
@@ -144,6 +148,7 @@ public class ApplicationController {
         return applicationMapper.toDto(applicationService.acceptApplication(id, userId, userRole));
     }
 
+    @SecurityRequirement(name = "Bearer Authentication")
     @Operation(
             summary = "Reject an application",
             description = "Marks the application as REJECTED. Only the employer who owns the vacancy may perform this action. Publishes a REJECTED notification event to Kafka."
@@ -162,6 +167,7 @@ public class ApplicationController {
         return applicationMapper.toDto(applicationService.rejectApplicationById(id, userId, userRole));
     }
 
+    @SecurityRequirement(name = "Bearer Authentication")
     @Operation(
             summary = "Withdraw an application",
             description = "Marks the application as WITHDRAWN. Only the candidate who submitted the application may perform this action. Publishes a WITHDRAWN notification event to Kafka."
