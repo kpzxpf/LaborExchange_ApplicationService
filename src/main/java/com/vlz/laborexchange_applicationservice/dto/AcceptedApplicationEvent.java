@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class RejectedApplicationEvent {
+public class AcceptedApplicationEvent {
     private Long applicationId;
     private Long candidateId;
     private String candidateEmail;

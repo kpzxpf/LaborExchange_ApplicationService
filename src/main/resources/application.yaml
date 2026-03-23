@@ -13,6 +13,7 @@ spring:
       new-topic: NEW
       rejected-topic: REJECTED
       withdrawn-topic: WITHDRAWN
+      accepted-topic: ACCEPTED
 
 
   clients:
@@ -90,6 +91,12 @@ management:
     export:
       prometheus:
         enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://${ZIPKIN_HOST:localhost}:9411/api/v2/spans
 
 resilience4j:
   circuitbreaker:

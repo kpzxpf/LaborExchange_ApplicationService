@@ -8,10 +8,12 @@ import com.vlz.laborexchange_applicationservice.entity.ApplicationStatus;
 import com.vlz.laborexchange_applicationservice.entity.ApplicationStatusType;
 import com.vlz.laborexchange_applicationservice.exception.DuplicateApplicationException;
 import com.vlz.laborexchange_applicationservice.mapper.ApplicationMapper;
+import com.vlz.laborexchange_applicationservice.producer.AcceptedApplicationNotificationProducer;
 import com.vlz.laborexchange_applicationservice.producer.NewApplicationNotificationProducer;
 import com.vlz.laborexchange_applicationservice.producer.RejectedApplicationNotificationProducer;
 import com.vlz.laborexchange_applicationservice.producer.WithdrawnApplicationProducer;
 import com.vlz.laborexchange_applicationservice.repository.ApplicationRepository;
+import com.vlz.laborexchange_applicationservice.repository.ApplicationStatusRepository;
 import com.vlz.laborexchange_applicationservice.service.ApplicationService;
 import com.vlz.laborexchange_applicationservice.service.CompanyRetryClient;
 import com.vlz.laborexchange_applicationservice.service.ResumeRetryClient;
@@ -36,14 +38,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.lenient;
 
 @ExtendWith(MockitoExtension.class)
 class ApplicationServiceTest {
 
     @Mock private ApplicationRepository applicationRepository;
+    @Mock private ApplicationStatusRepository applicationStatusRepository;
     @Mock private NewApplicationNotificationProducer newApplicationNotificationProducer;
     @Mock private RejectedApplicationNotificationProducer rejectedApplicationNotificationProducer;
     @Mock private WithdrawnApplicationProducer withdrawnApplicationProducer;
+    @Mock private AcceptedApplicationNotificationProducer acceptedApplicationNotificationProducer;
     @Mock private VacancyRetryClient vacancyRetryClient;
     @Mock private UserRetryClient userRetryClient;
     @Mock private ApplicationMapper applicationMapper;
@@ -64,9 +69,11 @@ class ApplicationServiceTest {
         executor = Executors.newSingleThreadExecutor();
         applicationService = new ApplicationService(
                 applicationRepository,
+                applicationStatusRepository,
                 newApplicationNotificationProducer,
                 rejectedApplicationNotificationProducer,
                 withdrawnApplicationProducer,
+                acceptedApplicationNotificationProducer,
                 vacancyRetryClient,
                 userRetryClient,
                 applicationMapper,
@@ -74,6 +81,14 @@ class ApplicationServiceTest {
                 companyRetryClient,
                 executor
         );
+        // Stub statusRepository for all status-resolution calls used across tests
+        for (ApplicationStatusType type : ApplicationStatusType.values()) {
+            ApplicationStatus st = new ApplicationStatus();
+            st.setId(type.getId());
+            st.setCode(type);
+            st.setName(type.name());
+            lenient().when(applicationStatusRepository.findByCode(type)).thenReturn(Optional.of(st));
+        }
     }
 
     private Application buildApplication(Long id, ApplicationStatusType statusType) {
@@ -109,6 +124,36 @@ class ApplicationServiceTest {
         assertThat(result).isNotNull();
         assertThat(result.getId()).isEqualTo(1L);
         assertThat(result.getStatusFromType()).isEqualTo(ApplicationStatusType.NEW);
+    }
+
+    @Test
+    void createApplication_withCoverLetter_persistsIt() {
+        ApplicationRequestDto dto = ApplicationRequestDto.builder()
+                .vacancyId(10L).candidateId(20L).employerId(30L).resumeId(40L)
+                .coverLetter("I am very interested in this position.")
+                .build();
+
+        Application saved = Application.builder()
+                .id(1L)
+                .vacancyId(10L)
+                .candidateId(20L)
+                .employerId(30L)
+                .resumeId(40L)
+                .coverLetter("I am very interested in this position.")
+                .status(new ApplicationStatus())
+                .build();
+        saved.getStatus().setId(ApplicationStatusType.NEW.getId());
+        saved.getStatus().setCode(ApplicationStatusType.NEW);
+
+        when(applicationRepository.existsByVacancyIdAndCandidateIdAndResumeId(anyLong(), anyLong(), anyLong()))
+                .thenReturn(false);
+        when(applicationRepository.save(any(Application.class))).thenReturn(saved);
+        when(userRetryClient.getEmailByUserId(anyLong())).thenReturn("test@test.com");
+        when(vacancyRetryClient.getVacancyTitle(anyLong())).thenReturn("Java Developer");
+
+        Application result = applicationService.createApplication(dto);
+
+        assertThat(result.getCoverLetter()).isEqualTo("I am very interested in this position.");
     }
 
     @Test

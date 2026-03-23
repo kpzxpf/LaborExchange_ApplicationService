@@ -51,6 +51,9 @@ public class ApplicationResponseDto {
     @Schema(description = "Resume title fetched from ResumeService (null if service unavailable)", example = "Java Developer CV")
     private String resumeTitle;
 
+    @Schema(description = "Optional cover letter from the candidate")
+    private String coverLetter;
+
     @Schema(description = "Timestamp when the application was created", example = "2026-03-20T12:00:00")
     private LocalDateTime createdAt;
 }

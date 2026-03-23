@@ -32,4 +32,7 @@ public class ApplicationRequestDto {
     @Schema(description = "Resume the candidate is attaching to this application", example = "9", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotNull
     private Long resumeId;
+
+    @Schema(description = "Optional cover letter from the candidate", example = "I am very interested in this position...")
+    private String coverLetter;
 }

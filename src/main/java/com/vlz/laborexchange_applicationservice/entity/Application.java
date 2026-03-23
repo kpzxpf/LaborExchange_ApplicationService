@@ -34,6 +34,9 @@ public class Application {
     @Column(name = "resume_id", nullable = false)
     private Long resumeId;
 
+    @Column(name = "cover_letter", columnDefinition = "TEXT")
+    private String coverLetter;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "status_id", nullable = false)
     private ApplicationStatus status;

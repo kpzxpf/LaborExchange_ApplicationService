@@ -11,6 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class NewApplicationEvent {
     private Long applicationId;
+    private Long employerId;
     private String employerEmail;
     private String vacancyTitle;
 }

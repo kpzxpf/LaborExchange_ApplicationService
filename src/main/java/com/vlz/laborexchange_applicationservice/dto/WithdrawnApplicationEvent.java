@@ -10,7 +10,8 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class WithdrawnApplicationEvent {
-    private Long  applicationId;
-    private String  employerEmail;
-    private String  vacancyTitle;
+    private Long applicationId;
+    private Long employerId;
+    private String employerEmail;
+    private String vacancyTitle;
 }

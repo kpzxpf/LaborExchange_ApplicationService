@@ -1,5 +1,6 @@
 package com.vlz.laborexchange_applicationservice.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -8,6 +9,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
+@Slf4j
 @Configuration
 public class AsyncConfig {
 
@@ -23,6 +25,7 @@ public class AsyncConfig {
             @Override
             protected void terminated() {
                 super.terminated();
+                log.info("notificationExecutor terminated");
             }
         };
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {

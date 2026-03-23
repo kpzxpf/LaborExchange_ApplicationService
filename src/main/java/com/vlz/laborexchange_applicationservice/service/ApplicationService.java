@@ -2,13 +2,16 @@ package com.vlz.laborexchange_applicationservice.service;
 
 import com.vlz.laborexchange_applicationservice.dto.*;
 import com.vlz.laborexchange_applicationservice.entity.Application;
+import com.vlz.laborexchange_applicationservice.entity.ApplicationStatus;
 import com.vlz.laborexchange_applicationservice.entity.ApplicationStatusType;
 import com.vlz.laborexchange_applicationservice.exception.DuplicateApplicationException;
 import com.vlz.laborexchange_applicationservice.mapper.ApplicationMapper;
+import com.vlz.laborexchange_applicationservice.producer.AcceptedApplicationNotificationProducer;
 import com.vlz.laborexchange_applicationservice.producer.NewApplicationNotificationProducer;
 import com.vlz.laborexchange_applicationservice.producer.RejectedApplicationNotificationProducer;
 import com.vlz.laborexchange_applicationservice.producer.WithdrawnApplicationProducer;
 import com.vlz.laborexchange_applicationservice.repository.ApplicationRepository;
+import com.vlz.laborexchange_applicationservice.repository.ApplicationStatusRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -30,9 +33,11 @@ import java.util.stream.Collectors;
 public class ApplicationService {
 
     private final ApplicationRepository applicationRepository;
+    private final ApplicationStatusRepository statusRepository;
     private final NewApplicationNotificationProducer newApplicationNotificationProducer;
     private final RejectedApplicationNotificationProducer rejectedApplicationNotificationProducer;
     private final WithdrawnApplicationProducer withdrawnApplicationProducer;
+    private final AcceptedApplicationNotificationProducer acceptedApplicationNotificationProducer;
     private final VacancyRetryClient vacancyRetryClient;
     private final UserRetryClient userRetryClient;
     private final ApplicationMapper applicationMapper;
@@ -42,9 +47,11 @@ public class ApplicationService {
 
     public ApplicationService(
             ApplicationRepository applicationRepository,
+            ApplicationStatusRepository statusRepository,
             NewApplicationNotificationProducer newApplicationNotificationProducer,
             RejectedApplicationNotificationProducer rejectedApplicationNotificationProducer,
             WithdrawnApplicationProducer withdrawnApplicationProducer,
+            AcceptedApplicationNotificationProducer acceptedApplicationNotificationProducer,
             VacancyRetryClient vacancyRetryClient,
             UserRetryClient userRetryClient,
             ApplicationMapper applicationMapper,
@@ -52,9 +59,11 @@ public class ApplicationService {
             CompanyRetryClient companyRetryClient,
             @Qualifier("notificationExecutor") ExecutorService notificationExecutor) {
         this.applicationRepository = applicationRepository;
+        this.statusRepository = statusRepository;
         this.newApplicationNotificationProducer = newApplicationNotificationProducer;
         this.rejectedApplicationNotificationProducer = rejectedApplicationNotificationProducer;
         this.withdrawnApplicationProducer = withdrawnApplicationProducer;
+        this.acceptedApplicationNotificationProducer = acceptedApplicationNotificationProducer;
         this.vacancyRetryClient = vacancyRetryClient;
         this.userRetryClient = userRetryClient;
         this.applicationMapper = applicationMapper;
@@ -63,9 +72,13 @@ public class ApplicationService {
         this.notificationExecutor = notificationExecutor;
     }
 
+    private ApplicationStatus resolveStatus(ApplicationStatusType type) {
+        return statusRepository.findByCode(type)
+                .orElseThrow(() -> new EntityNotFoundException("ApplicationStatus not found for type: " + type));
+    }
+
     @Transactional
     public Application createApplication(ApplicationRequestDto applicationDto) {
-        // Bug 18: duplicate check before building the entity
         existsByVacancyIdAndCandidateIdAndResumeId(
                 applicationDto.getVacancyId(), applicationDto.getCandidateId(), applicationDto.getResumeId());
 
@@ -74,14 +87,16 @@ public class ApplicationService {
                 .candidateId(applicationDto.getCandidateId())
                 .employerId(applicationDto.getEmployerId())
                 .resumeId(applicationDto.getResumeId())
+                .coverLetter(applicationDto.getCoverLetter())
                 .build();
 
-        application.setStatusFromType(ApplicationStatusType.NEW);
+        application.setStatus(resolveStatus(ApplicationStatusType.NEW));
 
         Application savedApplication = applicationRepository.save(application);
 
         CompletableFuture.runAsync(() -> newApplicationNotificationProducer.send(NewApplicationEvent.builder()
                 .applicationId(savedApplication.getId())
+                .employerId(savedApplication.getEmployerId())
                 .employerEmail(userRetryClient.getEmailByUserId(savedApplication.getEmployerId()))
                 .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
                 .build()), notificationExecutor);
@@ -92,13 +107,13 @@ public class ApplicationService {
     @Transactional
     public Application rejectApplication(ApplicationRequestDto applicationDto) {
         Application application = getById(applicationDto.getId());
-        application.setStatusFromType(ApplicationStatusType.REJECTED);
-
+        application.setStatus(resolveStatus(ApplicationStatusType.REJECTED));
 
         Application savedApplication = applicationRepository.save(application);
 
         CompletableFuture.runAsync(() -> rejectedApplicationNotificationProducer.send(RejectedApplicationEvent.builder()
                 .applicationId(savedApplication.getId())
+                .candidateId(savedApplication.getCandidateId())
                 .candidateEmail(userRetryClient.getEmailByUserId(savedApplication.getCandidateId()))
                 .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
                 .build()), notificationExecutor);
@@ -109,12 +124,13 @@ public class ApplicationService {
     @Transactional
     public Application withdrawnApplication(ApplicationRequestDto applicationDto) {
         Application application = getById(applicationDto.getId());
-        application.setStatusFromType(ApplicationStatusType.WITHDRAWN);
+        application.setStatus(resolveStatus(ApplicationStatusType.WITHDRAWN));
 
         Application savedApplication = applicationRepository.save(application);
 
         CompletableFuture.runAsync(() -> withdrawnApplicationProducer.send(WithdrawnApplicationEvent.builder()
                 .applicationId(savedApplication.getId())
+                .employerId(savedApplication.getEmployerId())
                 .employerEmail(userRetryClient.getEmailByUserId(savedApplication.getEmployerId()))
                 .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
                 .build()), notificationExecutor);
@@ -125,27 +141,35 @@ public class ApplicationService {
     @Transactional
     public Application acceptApplication(Long id, Long userId, String userRole) {
         Application application = getById(id);
-        // Employer must own the vacancy (employerId on application) to accept
         if (!"EMPLOYER".equals(userRole) || !application.getEmployerId().equals(userId)) {
             log.warn("Access denied: user {} role {} attempted to accept application {}", userId, userRole, id);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the employer who owns this vacancy can accept applications");
         }
-        application.setStatusFromType(ApplicationStatusType.ACCEPTED);
-        return applicationRepository.save(application);
+        application.setStatus(resolveStatus(ApplicationStatusType.ACCEPTED));
+        Application savedApplication = applicationRepository.save(application);
+
+        CompletableFuture.runAsync(() -> acceptedApplicationNotificationProducer.send(AcceptedApplicationEvent.builder()
+                .applicationId(savedApplication.getId())
+                .candidateId(savedApplication.getCandidateId())
+                .candidateEmail(userRetryClient.getEmailByUserId(savedApplication.getCandidateId()))
+                .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
+                .build()), notificationExecutor);
+
+        return savedApplication;
     }
 
     @Transactional
     public Application rejectApplicationById(Long id, Long userId, String userRole) {
         Application application = getById(id);
-        // Employer must own the vacancy (employerId on application) to reject
         if (!"EMPLOYER".equals(userRole) || !application.getEmployerId().equals(userId)) {
             log.warn("Access denied: user {} role {} attempted to reject application {}", userId, userRole, id);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the employer who owns this vacancy can reject applications");
         }
-        application.setStatusFromType(ApplicationStatusType.REJECTED);
+        application.setStatus(resolveStatus(ApplicationStatusType.REJECTED));
         Application savedApplication = applicationRepository.save(application);
         CompletableFuture.runAsync(() -> rejectedApplicationNotificationProducer.send(RejectedApplicationEvent.builder()
                 .applicationId(savedApplication.getId())
+                .candidateId(savedApplication.getCandidateId())
                 .candidateEmail(userRetryClient.getEmailByUserId(savedApplication.getCandidateId()))
                 .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
                 .build()), notificationExecutor);
@@ -155,15 +179,15 @@ public class ApplicationService {
     @Transactional
     public Application withdrawApplicationById(Long id, Long userId, String userRole) {
         Application application = getById(id);
-        // Candidate must own the application to withdraw
         if (!"JOB_SEEKER".equals(userRole) || !application.getCandidateId().equals(userId)) {
             log.warn("Access denied: user {} role {} attempted to withdraw application {}", userId, userRole, id);
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the candidate who submitted this application can withdraw it");
         }
-        application.setStatusFromType(ApplicationStatusType.WITHDRAWN);
+        application.setStatus(resolveStatus(ApplicationStatusType.WITHDRAWN));
         Application savedApplication = applicationRepository.save(application);
         CompletableFuture.runAsync(() -> withdrawnApplicationProducer.send(WithdrawnApplicationEvent.builder()
                 .applicationId(savedApplication.getId())
+                .employerId(savedApplication.getEmployerId())
                 .employerEmail(userRetryClient.getEmailByUserId(savedApplication.getEmployerId()))
                 .vacancyTitle(vacancyRetryClient.getVacancyTitle(savedApplication.getVacancyId()))
                 .build()), notificationExecutor);
@@ -185,11 +209,11 @@ public class ApplicationService {
 
         List<ApplicationResponseDto> dtos = applications.stream()
                 .map(applicationMapper::toDto)
-                .collect(Collectors.toList());
+                .toList();
 
         List<CompletableFuture<ApplicationResponseDto>> futures = dtos.stream()
                 .map(dto -> CompletableFuture.supplyAsync(() -> enrichApplicationDto(dto), notificationExecutor))
-                .collect(Collectors.toList());
+                .toList();
 
         return futures.stream()
                 .map(f -> {
@@ -210,11 +234,11 @@ public class ApplicationService {
 
         List<ApplicationResponseDto> dtos = applications.stream()
                 .map(applicationMapper::toDto)
-                .collect(Collectors.toList());
+                .toList();
 
         List<CompletableFuture<ApplicationResponseDto>> futures = dtos.stream()
                 .map(dto -> CompletableFuture.supplyAsync(() -> enrichApplicationDto(dto), notificationExecutor))
-                .collect(Collectors.toList());
+                .toList();
 
         return futures.stream()
                 .map(f -> {
@@ -235,11 +259,11 @@ public class ApplicationService {
 
         List<ApplicationResponseDto> dtos = applications.stream()
                 .map(applicationMapper::toDto)
-                .collect(Collectors.toList());
+                .toList();
 
         List<CompletableFuture<ApplicationResponseDto>> futures = dtos.stream()
                 .map(dto -> CompletableFuture.supplyAsync(() -> enrichApplicationDto(dto), notificationExecutor))
-                .collect(Collectors.toList());
+                .toList();
 
         return futures.stream()
                 .map(f -> {
@@ -262,11 +286,11 @@ public class ApplicationService {
 
         List<ApplicationResponseDto> dtos = applications.stream()
                 .map(applicationMapper::toDto)
-                .collect(Collectors.toList());
+                .toList();
 
         List<CompletableFuture<ApplicationResponseDto>> futures = dtos.stream()
                 .map(dto -> CompletableFuture.supplyAsync(() -> enrichApplicationDto(dto), notificationExecutor))
-                .collect(Collectors.toList());
+                .toList();
 
         return futures.stream()
                 .map(f -> {
