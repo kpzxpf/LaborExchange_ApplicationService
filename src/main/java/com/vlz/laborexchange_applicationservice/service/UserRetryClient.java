@@ -5,12 +5,10 @@ import feign.FeignException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 
@@ -59,10 +57,7 @@ public class UserRetryClient {
 
     @Recover
     public String recoverEmailByUserId(Exception e, Long userId) {
-        log.error("Failed to fetch email for user id after retries: {}. Error: {}",
-                userId, e.getMessage());
-        throw new ResponseStatusException(
-                HttpStatus.SERVICE_UNAVAILABLE,
-                "User service is currently unavailable", e);
+        log.warn("Failed to fetch email for user id after retries: {}. Error: {}", userId, e.getMessage());
+        return null;
     }
 }

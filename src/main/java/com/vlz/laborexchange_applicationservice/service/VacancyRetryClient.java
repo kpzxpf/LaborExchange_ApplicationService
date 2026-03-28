@@ -5,12 +5,10 @@ import feign.FeignException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Recover;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.io.IOException;
 
@@ -41,9 +39,7 @@ public class VacancyRetryClient {
 
     @Recover
     public String recoverVacancyTitle(Exception e, Long id) {
-        log.error("Failed to fetch vacancy title after retries for id: {}. Error: {}", id, e.getMessage());
-        throw new ResponseStatusException(
-                HttpStatus.SERVICE_UNAVAILABLE,
-                "Vacancy service is currently unavailable", e);
+        log.warn("Failed to fetch vacancy title after retries for id: {}. Error: {}", id, e.getMessage());
+        return "Вакансия";
     }
 }
